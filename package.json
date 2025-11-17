@@ -1,0 +1,41 @@
+{
+  "name": "mcmc-ts",
+  "version": "0.1.0",
+  "description": "Minimal, typed MCMC samplers in TypeScript",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p .",
+    "dev": "tsc -w",
+    "test": "npm run build && node --test dist/test/**/*.js",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "keywords": [
+    "mcmc",
+    "metropolis-hastings",
+    "bayesian",
+    "typescript",
+    "sampler"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3"
+  },
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourname/mcmc-ts.git"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
