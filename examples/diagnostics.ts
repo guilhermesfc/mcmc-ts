@@ -1,4 +1,4 @@
-import { metropolisHastings, simpleESS } from "../src/index.js";
+import { metropolisHastings, simpleESS, essBDA } from "../src/index.js";
 
 const dim = 1;
 
@@ -32,10 +32,15 @@ console.log("Sample variance:", variance.toFixed(4), "(expected: 1.0000)");
 console.log("\n=== Effective Sample Size ===");
 console.log("ESS:", Math.round(simpleESS(xs)));
 console.log("ESS / n:", (simpleESS(xs) / n).toFixed(3));
+console.log("ESS (BDA):", Math.round(essBDA(xs)));
+console.log("ESS / n (BDA):", (essBDA(xs) / n).toFixed(3));
 
 // Check if starting point affects results
 console.log("\n=== Chain Behavior ===");
 console.log("Starting value:", res.rawTrace[0][0]);
-console.log("First 10 samples (post burn-in):", xs.slice(0, 10).map(x => x.toFixed(2)));
+console.log(
+  "First 10 samples (post burn-in):",
+  xs.slice(0, 10).map((x) => x.toFixed(2))
+);
 console.log("Min value:", Math.min(...xs).toFixed(2));
 console.log("Max value:", Math.max(...xs).toFixed(2));

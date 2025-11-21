@@ -4,10 +4,17 @@
   "description": "Minimal, typed MCMC samplers in TypeScript",
   "type": "module",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
-    "build": "tsc -p .",
-    "dev": "tsc -w",
-    "test": "npm run build && node --test dist/test/**/*.js",
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -w -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.dev.json",
+    "test": "vitest run",
     "prepublishOnly": "npm run build && npm test"
   },
   "keywords": [
@@ -17,23 +24,28 @@
     "typescript",
     "sampler"
   ],
-  "author": "",
-  "license": "MIT",
-  "devDependencies": {
-    "@types/node": "^24.10.0",
-    "prettier": "^3.6.2",
-    "typescript": "^5.9.3"
-  },
-  "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     }
   },
+  "sideEffects": false,
+  "author": "Guilherme Costa",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.10"
+  },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yourname/mcmc-ts.git"
+    "url": "git+https://github.com/guilhermecosta/mcmc-ts.git"
+  },
+  "homepage": "https://github.com/guilhermecosta/mcmc-ts#readme",
+  "bugs": {
+    "url": "https://github.com/guilhermecosta/mcmc-ts/issues"
   },
   "engines": {
     "node": ">=18"

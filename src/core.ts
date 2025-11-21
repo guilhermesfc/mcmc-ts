@@ -6,7 +6,10 @@ export interface RNG {
   uniform(): number;
 }
 
-// Minimal PCG32 with BigInt state; good for MCMC.
+// PCG-XSH-RR 32-bit-wide Xorshift-based RNG.
+// Based on:
+// O’Neill, Melissa E. (2014), "PCG: A Family of Simple Fast Space-Efficient
+// Statistically Good Random Number Generators".
 export class PCG32 implements RNG {
   private state: bigint;
   private inc: bigint;
