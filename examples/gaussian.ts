@@ -1,25 +1,68 @@
-import { metropolisHastings, simpleESS } from "../src/index.js";
+import { metropolisHastings, rhatAll, simpleESS } from "../src/index.js";
 
-const dim = 1;
+// Standard normal log-density
+const logDensity = (x: number[]) => -0.5 * x[0] * x[0];
 
-// Standard normal log density (up to a constant)
-const logDensity = (x: number[]) => {
-  const v = x[0];
-  return -0.5 * v * v; // no need to add -0.5*log(2π)
-};
+console.log("=== Running Multiple Chains ===\n");
 
-const res = metropolisHastings(logDensity, dim, {
-  iterations: 100_000,
-  stepSize: 0.7,
+// Run 4 chains to assess convergence
+const result = metropolisHastings(logDensity, 1, {
+  chains: 4,
+  iterations: 10_000,
   burnIn: 500,
   thin: 5,
-  start: [5],
+  stepSize: 0.7,
 });
 
-const xs = res.chain.map((row) => row[0]);
-const mean = xs.reduce((a, b) => a + b, 0) / xs.length;
+console.log(`Chains: ${result.samples.length}`);
+console.log(`Samples per chain: ${result.samples[0].length}`);
+console.log();
 
-console.log("Samples kept:", xs.length);
-console.log("Acceptance rate:", res.acceptanceRate.toFixed(3));
-console.log("Sample mean (should be ~0):", mean.toFixed(3));
-console.log("ESS (rough):", Math.round(simpleESS(xs)));
+// Show acceptance rates for each chain
+console.log("Acceptance rates:");
+result.acceptanceRates.forEach((rate, i) => {
+  console.log(`  Chain ${i + 1}: ${rate.toFixed(3)}`);
+});
+console.log();
+
+// Compute means for each chain
+console.log("Chain means:");
+const chainMeans = result.samples.map((chain) => {
+  const xs = chain.map((v) => v[0]);
+  return xs.reduce((a, b) => a + b, 0) / xs.length;
+});
+chainMeans.forEach((mean, i) => {
+  console.log(`  Chain ${i + 1}: ${mean.toFixed(3)}`);
+});
+console.log();
+
+// Compute ESS for each chain
+console.log("ESS per chain:");
+result.samples.forEach((chain, i) => {
+  const xs = chain.map((v) => v[0]);
+  const ess = simpleESS(xs);
+  console.log(`  Chain ${i + 1}: ${Math.round(ess)}`);
+});
+console.log();
+
+// Compute R-hat to assess convergence
+const rhats = rhatAll(result.samples);
+console.log("R-hat diagnostics:");
+console.log(`  Parameter 1: ${rhats[0].toFixed(4)}`);
+if (rhats[0] < 1.01) {
+  console.log("  ✓ Excellent convergence (R-hat < 1.01)");
+} else if (rhats[0] < 1.05) {
+  console.log("  ✓ Good convergence (R-hat < 1.05)");
+} else {
+  console.log("  ⚠ Chains may not have converged (R-hat > 1.05)");
+}
+console.log();
+
+// Combine all chains for final inference
+const allSamples = result.samples.flat();
+const xs = allSamples.map((v) => v[0]);
+const overallMean = xs.reduce((a, b) => a + b, 0) / xs.length;
+
+console.log("Combined results:");
+console.log(`  Total samples: ${xs.length}`);
+console.log(`  Mean: ${overallMean.toFixed(3)}`);

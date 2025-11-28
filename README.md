@@ -1,5 +1,9 @@
 # 🧮 mcmc-ts
 
+[![npm version](https://img.shields.io/npm/v/mcmc-ts)](https://www.npmjs.com/package/mcmc-ts)
+[![license](https://img.shields.io/npm/l/mcmc-ts)](https://github.com/guilhermesfc/mcmc-ts/blob/main/LICENSE)
+[![npm downloads](https://img.shields.io/npm/dm/mcmc-ts)](https://www.npmjs.com/package/mcmc-ts)
+
 A lightweight **Markov Chain Monte Carlo** library in **TypeScript**, featuring a clean implementation of the **Metropolis–Hastings** algorithm.
 
 ---
@@ -42,16 +46,19 @@ const result = metropolisHastings(logDensity, 1, {
   start: [5],
 });
 
-const xs = result.chain.map((row) => row[0]);
+// Extract samples from first (and only) chain
+const chain = result.samples[0];
+const xs = chain.map((row) => row[0]);
 const mean = xs.reduce((a, b) => a + b, 0) / xs.length;
 
 console.log("Samples:", xs.length);
-console.log("Acceptance rate:", result.acceptanceRate.toFixed(3));
+console.log("Acceptance rate:", result.acceptanceRates[0].toFixed(3));
 console.log("Sample mean:", mean.toFixed(3));
 console.log("ESS:", Math.round(simpleESS(xs)));
 ```
 
 **Output:**
+
 ```
 Samples: 1901
 Acceptance rate: 0.789
@@ -63,9 +70,37 @@ ESS: 710
 
 ---
 
+## 🔗 Multiple Chains & Convergence
+
+Run multiple chains to assess convergence:
+
+```typescript
+import { metropolisHastings, rhatAll } from "mcmc-ts";
+
+const result = metropolisHastings(logDensity, 1, {
+  chains: 4, // Run 4 chains
+  iterations: 10_000,
+  burnIn: 500,
+  stepSize: 0.7,
+});
+
+// Check convergence with R-hat
+const rhats = rhatAll(result.samples);
+console.log("R-hat:", rhats[0]); // Should be < 1.01 for good convergence
+```
+
+---
+
 ## 📚 API
 
+**Samplers**
+
 - `metropolisHastings(logDensity, dim, options)` - Metropolis-Hastings sampler
-- `simpleESS(samples)`, `essBDA(samples)` - Effective sample size diagnostics
-- `PCG32` - Fast random number generator
-- `zeros(dim)`, `add(a, b)`, `scale(a, s)` - Vector utilities
+  - Set `options.chains` to run multiple chains (default: 1)
+  - Set `options.seed` for reproducible results (default: 0n)
+  - Returns `samples` as `[chain][draw]` array (always 2D, even for single chain)
+
+**Diagnostics**
+
+- `simpleESS(samples)`, `essBDA(samples)` - Effective sample size
+- `rhat(chains)`, `rhatAll(samples)` - Gelman-Rubin convergence diagnostic

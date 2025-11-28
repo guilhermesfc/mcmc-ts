@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PCG32, add, scale, zeros } from "../src/core";
+import { PCG32, add, scale, zeros, Vector } from "../src/core";
 
 describe("PCG32", () => {
   it("generates uniform values in [0, 1)", () => {
@@ -21,7 +21,7 @@ describe("PCG32", () => {
 
   it("generates normal samples with correct mean and std", () => {
     const rng = new PCG32(42n);
-    const samples: number[] = [];
+    const samples: Vector = [];
     for (let i = 0; i < 10000; i++) {
       samples.push(rng.normal(6, 3));
     }

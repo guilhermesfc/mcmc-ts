@@ -3,3 +3,8 @@ dist
 .DS_Store
 npm-debug.log*
 package-lock.json
+mcmc-plot.html
+src/**/*.js
+src/**/*.js.map
+examples/**/*.js
+examples/**/*.js.map

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { simpleESS, essBDA } from "../src/diagnostics";
-import { PCG32 } from "../src/core";
+import { PCG32, Vector } from "../src/core";
 
 describe("simpleESS", () => {
   it("returns n for independent samples", () => {
@@ -13,7 +13,7 @@ describe("simpleESS", () => {
 
   it("returns low ESS for highly correlated samples", () => {
     // Random walk has high autocorrelation
-    const correlated: number[] = [0];
+    const correlated: Vector = [0];
     for (let i = 1; i < 1000; i++) {
       correlated.push(correlated[i - 1] + 0.01);
     }
@@ -30,6 +30,21 @@ describe("simpleESS", () => {
     const constant = Array(100).fill(5);
     expect(simpleESS(constant)).toBe(100);
   });
+
+  it("respects maxLag parameter", () => {
+    // Create correlated samples with long autocorrelation
+    const correlated: Vector = [0];
+    for (let i = 1; i < 500; i++) {
+      correlated.push(correlated[i - 1] * 0.95 + 0.1);
+    }
+
+    // ESS with small maxLag should be higher (less autocorr summed)
+    const essSmallLag = simpleESS(correlated, 10);
+    // ESS with large maxLag should be lower (more autocorr summed)
+    const essLargeLag = simpleESS(correlated, 200);
+
+    expect(essSmallLag).toBeGreaterThan(essLargeLag);
+  });
 });
 
 describe("essBDA", () => {
@@ -41,7 +56,7 @@ describe("essBDA", () => {
   });
 
   it("returns low ESS for highly correlated samples", () => {
-    const correlated: number[] = [0];
+    const correlated: Vector = [0];
     for (let i = 1; i < 1000; i++) {
       correlated.push(correlated[i - 1] + 0.01);
     }
@@ -60,5 +75,20 @@ describe("essBDA", () => {
     const ess = essBDA(samples);
     expect(ess).toBeGreaterThanOrEqual(1);
     expect(ess).toBeLessThanOrEqual(500);
+  });
+
+  it("respects maxLag parameter", () => {
+    // Create correlated samples with long autocorrelation
+    const correlated: Vector = [0];
+    for (let i = 1; i < 500; i++) {
+      correlated.push(correlated[i - 1] * 0.95 + 0.1);
+    }
+
+    // ESS with small maxLag should be higher (less autocorr summed)
+    const essSmallLag = essBDA(correlated, 10);
+    // ESS with large maxLag should be lower (more autocorr summed)
+    const essLargeLag = essBDA(correlated, 200);
+
+    expect(essSmallLag).toBeGreaterThan(essLargeLag);
   });
 });
