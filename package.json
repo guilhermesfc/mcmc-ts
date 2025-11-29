@@ -19,6 +19,7 @@
     "format:check": "prettier --check .",
     "prepublishOnly": "npm run format:check && npm run type-check && npm run build && npm test",
     "example:gaussian": "tsx examples/gaussian.ts",
+    "example:halfnormal": "tsx examples/halfnormal.ts",
     "example:plot": "tsx examples/plot-gaussian.ts"
   },
   "keywords": [

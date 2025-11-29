@@ -91,12 +91,31 @@ console.log("R-hat:", rhats[0]); // Should be < 1.01 for good convergence
 
 ---
 
+## 🎯 Constrained Sampling
+
+Use transforms for constrained distributions:
+
+```typescript
+import { metropolisHastings, positiveTransform } from "mcmc-ts";
+
+const result = metropolisHastings(halfNormalLogDensity, 1, {
+  transforms: [positiveTransform()], // Handles x > 0 constraint
+  start: [1.0],
+  iterations: 10_000,
+});
+```
+
+Available: `positiveTransform()`, `unitIntervalTransform()`, `simplexTransform()`
+
+---
+
 ## 📚 API
 
 **Samplers**
 
 - `metropolisHastings(logDensity, dim, options)` - Metropolis-Hastings sampler
   - Set `options.chains` to run multiple chains (default: 1)
+  - Set `options.transforms` for constrained sampling (optional)
   - Set `options.seed` for reproducible results (default: 0n)
   - Returns `samples` as `[chain][draw]` array (always 2D, even for single chain)
 
@@ -104,3 +123,7 @@ console.log("R-hat:", rhats[0]); // Should be < 1.01 for good convergence
 
 - `simpleESS(samples)`, `essBDA(samples)` - Effective sample size
 - `rhat(chains)`, `rhatAll(samples)` - Gelman-Rubin convergence diagnostic
+
+**Transforms**
+
+- `positiveTransform()`, `unitIntervalTransform()`, `simplexTransform()` - Constraint handlers

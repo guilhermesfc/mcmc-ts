@@ -1,4 +1,10 @@
-import { LogDensity, RNG, PCG32, Vector, add, scale, zeros } from "./core.js";
+import { LogDensity, PCG32, Vector, add, zeros } from "./core.js";
+import {
+  Transform,
+  transformedLogDensity,
+  applyTransformToChain,
+  composeTransforms,
+} from "./transforms.js";
 
 export interface MHOptions {
   stepSize?: number; // proposal std dev (isotropic)
@@ -6,9 +12,10 @@ export interface MHOptions {
   thin?: number; // keep 1 of every 'thin' samples
   iterations: number; // total proposals
   seed?: bigint; // RNG seed for reproducibility (default: 0)
-  start?: Vector; // initial point (for single chain)
+  start?: Vector; // initial point (for single chain, in constrained space if transforms provided)
   chains?: number; // number of chains to run (default: 1)
-  chainStarts?: Vector[]; // custom starting points per chain
+  chainStarts?: Vector[]; // custom starting points per chain (in constrained space if transforms provided)
+  transforms?: Transform[]; // optional transforms (one per dimension)
 }
 
 export interface MHResult {
@@ -31,13 +38,46 @@ export function metropolisHastings(
     chains = 1,
     chainStarts,
     seed = 0n,
+    transforms,
   } = opts;
 
+  // Validate transforms (if provided)
+  if (transforms) {
+    if (transforms.length !== dim) {
+      throw new Error(
+        `transforms.length (${transforms.length}) must equal dim (${dim})`,
+      );
+    }
+  }
+
+  // Compose transforms and prepare transformed log density
+  let composedTransform: Transform | undefined;
+  let actualLogDensity = logDensity;
+
+  if (transforms) {
+    composedTransform = composeTransforms(transforms);
+    actualLogDensity = transformedLogDensity(logDensity, composedTransform);
+  }
+
+  // Transform user-provided starting points (if transforms are used)
+  let actualStart = start;
+  let actualChainStarts = chainStarts;
+
+  if (transforms && composedTransform) {
+    // User provides constrained starts, we need unconstrained
+    if (start && start !== zeros(dim)) {
+      actualStart = composedTransform.inverse(start);
+    }
+    if (chainStarts) {
+      actualChainStarts = chainStarts.map((s) => composedTransform!.inverse(s));
+    }
+  }
+
   // Generate starting points for each chain
-  const starts: Vector[] = chainStarts
-    ? chainStarts
+  const starts: Vector[] = actualChainStarts
+    ? actualChainStarts
     : chains === 1
-      ? [start]
+      ? [actualStart]
       : generateDispersedStarts(dim, chains, seed);
 
   if (starts.length !== chains) {
@@ -57,7 +97,7 @@ export function metropolisHastings(
     const chainRng = new PCG32(seed + BigInt(c), BigInt(c));
 
     let x: Vector = starts[c].slice();
-    let logp = logDensity(x);
+    let logp = actualLogDensity(x);
     const rawTrace: Vector[] = [x.slice()];
     let accepted = 0;
 
@@ -65,7 +105,7 @@ export function metropolisHastings(
       // propose x' = x + N(0, stepSize^2 I)
       const proposal: Vector = x.map(() => chainRng.normal(0, stepSize));
       const xNew = add(x, proposal);
-      const logpNew = logDensity(xNew);
+      const logpNew = actualLogDensity(xNew);
 
       // symmetric proposal => MH ratio = exp(logpNew - logp)
       const logAlpha = logpNew - logp;
@@ -88,6 +128,21 @@ export function metropolisHastings(
     allSamples.push(kept);
     allRawTraces.push(rawTrace);
     acceptanceRates.push(accepted / iterations);
+  }
+
+  // Transform samples back to constrained space (if transforms were used)
+  if (transforms && composedTransform) {
+    const constrainedSamples = allSamples.map((chain) =>
+      applyTransformToChain(chain, composedTransform!),
+    );
+    const constrainedRawTraces = allRawTraces.map((chain) =>
+      applyTransformToChain(chain, composedTransform!),
+    );
+    return {
+      samples: constrainedSamples,
+      acceptanceRates,
+      rawTraces: constrainedRawTraces,
+    };
   }
 
   return {

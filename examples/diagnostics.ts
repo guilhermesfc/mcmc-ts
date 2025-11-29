@@ -58,7 +58,7 @@ res.samples.forEach((chain, i) => {
   const xs = chain.map((v) => v[0]);
   const ess = essBDA(xs);
   console.log(
-    `Chain ${i + 1}: ${Math.round(ess)} (${(ess / xs.length).toFixed(2)})`
+    `Chain ${i + 1}: ${Math.round(ess)} (${(ess / xs.length).toFixed(2)})`,
   );
 });
 
@@ -141,7 +141,7 @@ if (maxRhat < 1.01) {
 } else {
   console.log("⚠ Chains have NOT converged (R-hat > 1.05)");
   console.log(
-    "   → The curved geometry makes this distribution hard to sample"
+    "   → The curved geometry makes this distribution hard to sample",
   );
   console.log("   → Would need more advanced methods (e.g., HMC, NUTS)");
 }
@@ -152,7 +152,7 @@ badRes.samples.forEach((chain, i) => {
   const xs = chain.map((v) => v[0]);
   const ess = essBDA(xs);
   console.log(
-    `Chain ${i + 1}: ${Math.round(ess)} (${(ess / xs.length).toFixed(2)})`
+    `Chain ${i + 1}: ${Math.round(ess)} (${(ess / xs.length).toFixed(2)})`,
   );
 });
 
