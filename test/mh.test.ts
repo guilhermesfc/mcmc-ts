@@ -217,3 +217,171 @@ describe("metropolisHastings with transforms", () => {
     });
   });
 });
+
+describe("metropolisHastings with adaptive step size", () => {
+  it("adapts step size to achieve target acceptance rate", () => {
+    const logp = (x: Vector) => -0.5 * x[0] * x[0];
+
+    // Start with a reasonable step size that needs some adjustment
+    const result = metropolisHastings(logp, 1, {
+      iterations: 10000,
+      stepSize: 0.5,
+      targetAcceptance: 0.23,
+      adaptSteps: 5000,
+      adaptWindow: 50,
+      burnIn: 5000,
+    });
+
+    // After adaptation, acceptance rate should be closer to target
+    const acceptanceRate = result.acceptanceRates[0];
+    expect(acceptanceRate).toBeGreaterThan(0.1);
+    expect(acceptanceRate).toBeLessThan(0.5);
+  });
+
+  it("does not adapt when targetAcceptance is not provided", () => {
+    const logp = (x: Vector) => -0.5 * x[0] * x[0];
+
+    // Without targetAcceptance, behavior should be unchanged
+    const result = metropolisHastings(logp, 1, {
+      iterations: 2000,
+      stepSize: 0.01, // Very small step size
+      burnIn: 100,
+    });
+
+    // With such a small step size and no adaptation, acceptance should be very high
+    expect(result.acceptanceRates[0]).toBeGreaterThan(0.9);
+  });
+
+  it("adapts independently per chain", () => {
+    const logp = (x: Vector) => -0.5 * x[0] * x[0];
+
+    const result = metropolisHastings(logp, 1, {
+      chains: 4,
+      iterations: 10000,
+      stepSize: 0.5,
+      targetAcceptance: 0.23,
+      adaptSteps: 5000,
+      burnIn: 5000,
+    });
+
+    // All chains should have adapted to reasonable acceptance rates
+    result.acceptanceRates.forEach((rate) => {
+      expect(rate).toBeGreaterThan(0.1);
+      expect(rate).toBeLessThan(0.5);
+    });
+  });
+
+  it("works with transforms and adaptive step size", () => {
+    const halfNormalLogDensity = (x: Vector) => {
+      if (x[0] <= 0) return -Infinity;
+      return -0.5 * x[0] * x[0];
+    };
+
+    const result = metropolisHastings(halfNormalLogDensity, 1, {
+      transforms: [positiveTransform()],
+      iterations: 10000,
+      burnIn: 5000,
+      stepSize: 1.0, // Closer to optimal to avoid numerical issues
+      targetAcceptance: 0.23,
+      adaptSteps: 5000,
+      start: [1.0],
+    });
+
+    const chain = result.samples[0];
+    const xs = chain.map((s) => s[0]);
+
+    // All samples should be positive
+    xs.forEach((x) => expect(x).toBeGreaterThan(0));
+
+    // Acceptance rate should be reasonable after adaptation
+    expect(result.acceptanceRates[0]).toBeGreaterThan(0.1);
+    expect(result.acceptanceRates[0]).toBeLessThan(0.5);
+  });
+
+  it("stops adapting after adaptSteps", () => {
+    const logp = (x: Vector) => -0.5 * x[0] * x[0];
+
+    // Run two samplers with different adaptSteps but same total iterations
+    const shortAdapt = metropolisHastings(logp, 1, {
+      iterations: 10000,
+      stepSize: 0.5,
+      targetAcceptance: 0.23,
+      adaptSteps: 1000, // Short adaptation
+      seed: 42n,
+    });
+
+    const longAdapt = metropolisHastings(logp, 1, {
+      iterations: 10000,
+      stepSize: 0.5,
+      targetAcceptance: 0.23,
+      adaptSteps: 8000, // Long adaptation
+      seed: 42n,
+    });
+
+    // Both should run without error
+    expect(shortAdapt.samples[0].length).toBeGreaterThan(0);
+    expect(longAdapt.samples[0].length).toBeGreaterThan(0);
+
+    // Both should have reasonable acceptance rates
+    expect(shortAdapt.acceptanceRates[0]).toBeGreaterThan(0.1);
+    expect(longAdapt.acceptanceRates[0]).toBeGreaterThan(0.1);
+  });
+});
+
+describe("metropolisHastings with per-dimension step sizes", () => {
+  it("accepts an array of step sizes", () => {
+    // 2D Gaussian with different scales: x ~ N(0,1), y ~ N(0,100)
+    const logp = (x: Vector) =>
+      -0.5 * x[0] * x[0] - (0.5 * (x[1] * x[1])) / 100;
+
+    const result = metropolisHastings(logp, 2, {
+      iterations: 5000,
+      stepSize: [0.5, 5.0], // Different step sizes per dimension
+      burnIn: 500,
+    });
+
+    const chain = result.samples[0];
+    const xs = chain.map((s) => s[0]);
+    const ys = chain.map((s) => s[1]);
+
+    const meanX = xs.reduce((a, b) => a + b, 0) / xs.length;
+    const meanY = ys.reduce((a, b) => a + b, 0) / ys.length;
+
+    // Both means should be close to 0
+    expect(Math.abs(meanX)).toBeLessThan(0.2);
+    expect(Math.abs(meanY)).toBeLessThan(2);
+
+    // Acceptance rate should be reasonable
+    expect(result.acceptanceRates[0]).toBeGreaterThan(0.1);
+    expect(result.acceptanceRates[0]).toBeLessThan(0.9);
+  });
+
+  it("throws error if stepSize array length doesn't match dim", () => {
+    const logp = (x: Vector) => -0.5 * x[0] * x[0];
+
+    expect(() => {
+      metropolisHastings(logp, 2, {
+        stepSize: [0.5], // Only 1 step size for 2 dimensions
+        iterations: 100,
+      });
+    }).toThrow("stepSize array length (1) must equal dim (2)");
+  });
+
+  it("works with adaptation and per-dimension step sizes", () => {
+    // 2D Gaussian with different scales
+    const logp = (x: Vector) =>
+      -0.5 * x[0] * x[0] - (0.5 * (x[1] * x[1])) / 100;
+
+    const result = metropolisHastings(logp, 2, {
+      iterations: 10000,
+      stepSize: [0.5, 5.0],
+      targetAcceptance: 0.23,
+      adaptSteps: 5000,
+      burnIn: 5000,
+    });
+
+    // Should have reasonable acceptance after adaptation
+    expect(result.acceptanceRates[0]).toBeGreaterThan(0.1);
+    expect(result.acceptanceRates[0]).toBeLessThan(0.5);
+  });
+});

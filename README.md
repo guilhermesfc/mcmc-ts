@@ -72,21 +72,21 @@ ESS: 710
 
 ## 🔗 Multiple Chains & Convergence
 
-Run multiple chains to assess convergence:
+Run multiple chains and get a summary with mean, sd, ESS, and R-hat:
 
 ```typescript
-import { metropolisHastings, rhatAll } from "mcmc-ts";
+import { metropolisHastings, summarizeChains } from "mcmc-ts";
 
 const result = metropolisHastings(logDensity, 1, {
-  chains: 4, // Run 4 chains
+  chains: 4,
   iterations: 10_000,
   burnIn: 500,
   stepSize: 0.7,
 });
 
-// Check convergence with R-hat
-const rhats = rhatAll(result.samples);
-console.log("R-hat:", rhats[0]); // Should be < 1.01 for good convergence
+const summary = summarizeChains(result.samples);
+console.log(summary);
+// { mean: [0.01], sd: [1.02], ess: [3800], rhat: [1.001] }
 ```
 
 ---
@@ -121,6 +121,7 @@ Available: `positiveTransform()`, `unitIntervalTransform()`, `simplexTransform()
 
 **Diagnostics**
 
+- `summarizeChains(samples)` - Get mean, sd, ESS, and R-hat for all parameters
 - `simpleESS(samples)`, `essBDA(samples)` - Effective sample size
 - `rhat(chains)`, `rhatAll(samples)` - Gelman-Rubin convergence diagnostic
 

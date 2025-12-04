@@ -47,3 +47,13 @@ Hastings, W. K. (1970).
 _Monte Carlo Sampling Methods Using Markov Chains and Their Applications._ Biometrika, 57(1), 97–109.
 
 These papers introduce the Metropolis algorithm and Hastings' generalization that underpin the random-walk MH sampler implemented here.
+
+---
+
+## Adaptive MCMC
+
+Andrieu, C. & Thoms, J. (2008).
+_A Tutorial on Adaptive MCMC._ Statistics and Computing, 18(4), 343–373.
+https://people.eecs.berkeley.edu/~jordan/sail/readings/andrieu-thoms.pdf
+
+Comprehensive tutorial on adaptive MCMC methods, including conditions for ergodicity of adaptive chains. The Robbins-Monro step size adaptation implemented here is covered in Section 3.

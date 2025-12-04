@@ -160,3 +160,47 @@ export function rhatAll(samples: Vector[][]): number[] {
 
   return rhats;
 }
+
+export interface ChainSummary {
+  mean: number[];
+  sd: number[];
+  ess: number[];
+  rhat: number[];
+}
+
+// Summarize MCMC chains with mean, sd, ESS, and R-hat per parameter
+// samples: [chain][draw][parameter]
+export function summarizeChains(samples: Vector[][]): ChainSummary {
+  const nChains = samples.length;
+  const nDraws = samples[0]?.length ?? 0;
+  const nParams = samples[0]?.[0]?.length ?? 0;
+
+  const mean: number[] = [];
+  const sd: number[] = [];
+  const ess: number[] = [];
+
+  for (let p = 0; p < nParams; p++) {
+    // Flatten all chains for this parameter
+    const allDraws: number[] = [];
+    for (let c = 0; c < nChains; c++) {
+      for (let d = 0; d < nDraws; d++) {
+        allDraws.push(samples[c][d][p]);
+      }
+    }
+
+    // Mean and SD
+    const m = allDraws.reduce((a, b) => a + b, 0) / allDraws.length;
+    const v =
+      allDraws.reduce((s, x) => s + (x - m) ** 2, 0) / (allDraws.length - 1);
+    mean.push(m);
+    sd.push(Math.sqrt(v));
+
+    // ESS (using essBDA on flattened draws)
+    ess.push(essBDA(allDraws));
+  }
+
+  // R-hat (reuse existing rhatAll, requires >= 2 chains)
+  const rhatValues = nChains >= 2 ? rhatAll(samples) : Array(nParams).fill(NaN);
+
+  return { mean, sd, ess, rhat: rhatValues };
+}

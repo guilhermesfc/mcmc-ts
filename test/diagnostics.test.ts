@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { simpleESS, essBDA } from "../src/diagnostics";
+import { simpleESS, essBDA, summarizeChains } from "../src/diagnostics";
 import { PCG32, Vector } from "../src/core";
 
 describe("simpleESS", () => {
@@ -90,5 +90,88 @@ describe("essBDA", () => {
     const essLargeLag = essBDA(correlated, 200);
 
     expect(essSmallLag).toBeGreaterThan(essLargeLag);
+  });
+});
+
+describe("summarizeChains", () => {
+  it("computes correct mean and sd for multiple chains", () => {
+    // 2 chains, 4 draws each, 1 parameter
+    // Chain 1: [1, 2, 3, 4] -> mean=2.5
+    // Chain 2: [5, 6, 7, 8] -> mean=6.5
+    // Combined: [1,2,3,4,5,6,7,8] -> mean=4.5, sd≈2.449
+    const samples: Vector[][] = [
+      [[1], [2], [3], [4]],
+      [[5], [6], [7], [8]],
+    ];
+
+    const summary = summarizeChains(samples);
+
+    expect(summary.mean[0]).toBeCloseTo(4.5);
+    expect(summary.sd[0]).toBeCloseTo(2.449, 2);
+    expect(summary.ess.length).toBe(1);
+    expect(summary.rhat.length).toBe(1);
+    expect(summary.rhat[0]).toBeGreaterThan(1); // chains not converged
+  });
+
+  it("returns NaN for rhat with single chain", () => {
+    const samples: Vector[][] = [[[1], [2], [3], [4]]];
+
+    const summary = summarizeChains(samples);
+
+    expect(summary.mean[0]).toBeCloseTo(2.5);
+    expect(summary.rhat[0]).toBeNaN();
+  });
+
+  it("handles multiple parameters", () => {
+    const rng = new PCG32(42n);
+    // 2 chains, 100 draws, 3 parameters
+    const samples: Vector[][] = [];
+    for (let c = 0; c < 2; c++) {
+      const chain: Vector[] = [];
+      for (let d = 0; d < 100; d++) {
+        chain.push([rng.normal(), rng.normal() + 5, rng.normal() * 2]);
+      }
+      samples.push(chain);
+    }
+
+    const summary = summarizeChains(samples);
+
+    expect(summary.mean.length).toBe(3);
+    expect(summary.sd.length).toBe(3);
+    expect(summary.ess.length).toBe(3);
+    expect(summary.rhat.length).toBe(3);
+
+    // Second parameter should have mean around 5
+    expect(summary.mean[1]).toBeGreaterThan(4);
+    expect(summary.mean[1]).toBeLessThan(6);
+
+    // Third parameter should have higher SD (scaled by 2)
+    expect(summary.sd[2]).toBeGreaterThan(summary.sd[0]);
+  });
+
+  it("works with converged chains", () => {
+    const rng = new PCG32(123n);
+    // 4 chains sampling from same distribution
+    const samples: Vector[][] = [];
+    for (let c = 0; c < 4; c++) {
+      const chain: Vector[] = [];
+      for (let d = 0; d < 500; d++) {
+        chain.push([rng.normal()]);
+      }
+      samples.push(chain);
+    }
+
+    const summary = summarizeChains(samples);
+
+    // Mean should be close to 0
+    expect(Math.abs(summary.mean[0])).toBeLessThan(0.2);
+    // SD should be close to 1
+    expect(summary.sd[0]).toBeGreaterThan(0.8);
+    expect(summary.sd[0]).toBeLessThan(1.2);
+    // R-hat should be close to 1 (converged)
+    expect(summary.rhat[0]).toBeGreaterThan(0.99);
+    expect(summary.rhat[0]).toBeLessThan(1.1);
+    // ESS should be reasonable
+    expect(summary.ess[0]).toBeGreaterThan(100);
   });
 });

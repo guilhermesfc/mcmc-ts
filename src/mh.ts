@@ -7,7 +7,7 @@ import {
 } from "./transforms.js";
 
 export interface MHOptions {
-  stepSize?: number; // proposal std dev (isotropic)
+  stepSize?: number | number[]; // proposal std dev (scalar or per-dimension)
   burnIn?: number; // how many inital samples to discard when returning
   thin?: number; // keep 1 of every 'thin' samples
   iterations: number; // total proposals
@@ -16,6 +16,9 @@ export interface MHOptions {
   chains?: number; // number of chains to run (default: 1)
   chainStarts?: Vector[]; // custom starting points per chain (in constrained space if transforms provided)
   transforms?: Transform[]; // optional transforms (one per dimension)
+  targetAcceptance?: number; // target acceptance rate for adaptation (e.g. 0.23)
+  adaptSteps?: number; // number of iterations to adapt step size (only during warmup)
+  adaptWindow?: number; // window size for computing acceptance rate (default: 50)
 }
 
 export interface MHResult {
@@ -30,7 +33,7 @@ export function metropolisHastings(
   opts: MHOptions,
 ): MHResult {
   const {
-    stepSize = 0.5,
+    stepSize: stepSizeOpt = 0.5,
     burnIn = 0,
     thin = 1,
     iterations,
@@ -39,7 +42,23 @@ export function metropolisHastings(
     chainStarts,
     seed = 0n,
     transforms,
+    targetAcceptance,
+    adaptSteps = 0,
+    adaptWindow = 50,
   } = opts;
+
+  const userProvidedStart = opts.start !== undefined;
+
+  // Normalize stepSize to array
+  const stepSizeArray: number[] = Array.isArray(stepSizeOpt)
+    ? stepSizeOpt
+    : Array(dim).fill(stepSizeOpt);
+
+  if (stepSizeArray.length !== dim) {
+    throw new Error(
+      `stepSize array length (${stepSizeArray.length}) must equal dim (${dim})`,
+    );
+  }
 
   // Validate transforms (if provided)
   if (transforms) {
@@ -65,7 +84,7 @@ export function metropolisHastings(
 
   if (transforms && composedTransform) {
     // User provides constrained starts, we need unconstrained
-    if (start && start !== zeros(dim)) {
+    if (userProvidedStart) {
       actualStart = composedTransform.inverse(start);
     }
     if (chainStarts) {
@@ -101,9 +120,17 @@ export function metropolisHastings(
     const rawTrace: Vector[] = [x.slice()];
     let accepted = 0;
 
+    // Adaptive step size state (per chain, per dimension)
+    const logStepArray = stepSizeArray.map((s) => Math.log(s));
+    const currentStepArray = stepSizeArray.slice();
+    let acceptedInWindow = 0;
+    const doAdapt = targetAcceptance != null && adaptSteps > 0;
+
     for (let t = 0; t < iterations; t++) {
-      // propose x' = x + N(0, stepSize^2 I)
-      const proposal: Vector = x.map(() => chainRng.normal(0, stepSize));
+      // propose x' = x + N(0, currentStepArray[i]^2) per dimension
+      const proposal: Vector = x.map((_, i) =>
+        chainRng.normal(0, currentStepArray[i]),
+      );
       const xNew = add(x, proposal);
       const logpNew = actualLogDensity(xNew);
 
@@ -115,8 +142,22 @@ export function metropolisHastings(
         x = xNew;
         logp = logpNew;
         accepted++;
+        acceptedInWindow++;
       }
       rawTrace.push(x.slice());
+
+      // Adaptive step size update (Robbins–Monro algorithm)
+      // Scales all dimensions proportionally
+      if (doAdapt && t < adaptSteps && (t + 1) % adaptWindow === 0) {
+        const accRate = acceptedInWindow / adaptWindow;
+        const delta = accRate - targetAcceptance!;
+        const eta = 0.05;
+        for (let i = 0; i < dim; i++) {
+          logStepArray[i] += eta * delta;
+          currentStepArray[i] = Math.exp(logStepArray[i]);
+        }
+        acceptedInWindow = 0;
+      }
     }
 
     // burn-in + thinning
