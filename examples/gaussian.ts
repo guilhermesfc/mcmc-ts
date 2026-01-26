@@ -1,21 +1,23 @@
-import { metropolisHastings, rhatAll, simpleESS } from "../src/index.js";
+import { defineModel } from "../src/index.js";
 
 // Standard normal log-density
 const logDensity = (x: number[]) => -0.5 * x[0] * x[0];
 
 console.log("=== Running Multiple Chains ===\n");
 
-// Run 4 chains to assess convergence
-const result = metropolisHastings(logDensity, 1, {
+// Define model and run 4 chains
+const model = defineModel({ logDensity, dim: 1 });
+
+const result = model.sample({
   chains: 4,
   iterations: 10_000,
-  burnIn: 500,
+  warmup: 500,
   thin: 5,
   stepSize: 0.7,
 });
 
-console.log(`Chains: ${result.samples.length}`);
-console.log(`Samples per chain: ${result.samples[0].length}`);
+console.log(`Chains: ${result.draws.length}`);
+console.log(`Samples per chain: ${result.draws[0].length}`);
 console.log();
 
 // Show acceptance rates for each chain
@@ -27,7 +29,7 @@ console.log();
 
 // Compute means for each chain
 console.log("Chain means:");
-const chainMeans = result.samples.map((chain) => {
+const chainMeans = result.draws.map((chain) => {
   const xs = chain.map((v) => v[0]);
   return xs.reduce((a, b) => a + b, 0) / xs.length;
 });
@@ -36,33 +38,27 @@ chainMeans.forEach((mean, i) => {
 });
 console.log();
 
-// Compute ESS for each chain
-console.log("ESS per chain:");
-result.samples.forEach((chain, i) => {
-  const xs = chain.map((v) => v[0]);
-  const ess = simpleESS(xs);
-  console.log(`  Chain ${i + 1}: ${Math.round(ess)}`);
-});
-console.log();
+// Get summary with ESS and R-hat
+const summary = result.summary();
+console.log("Summary:");
+console.log(`  Mean: ${summary.mean[0].toFixed(4)}`);
+console.log(`  SD: ${summary.sd[0].toFixed(4)}`);
+console.log(`  ESS: ${Math.round(summary.ess[0])}`);
+console.log(`  R-hat: ${summary.rhat[0].toFixed(4)}`);
 
-// Compute R-hat to assess convergence
-const rhats = rhatAll(result.samples);
-console.log("R-hat diagnostics:");
-console.log(`  Parameter 1: ${rhats[0].toFixed(4)}`);
-if (rhats[0] < 1.01) {
-  console.log("  ✓ Excellent convergence (R-hat < 1.01)");
-} else if (rhats[0] < 1.05) {
-  console.log("  ✓ Good convergence (R-hat < 1.05)");
+if (summary.rhat[0] < 1.01) {
+  console.log("  Excellent convergence (R-hat < 1.01)");
+} else if (summary.rhat[0] < 1.05) {
+  console.log("  Good convergence (R-hat < 1.05)");
 } else {
-  console.log("  ⚠ Chains may not have converged (R-hat > 1.05)");
+  console.log("  Chains may not have converged (R-hat > 1.05)");
 }
 console.log();
 
 // Combine all chains for final inference
-const allSamples = result.samples.flat();
+const allSamples = result.draws.flat();
 const xs = allSamples.map((v) => v[0]);
-const overallMean = xs.reduce((a, b) => a + b, 0) / xs.length;
 
 console.log("Combined results:");
 console.log(`  Total samples: ${xs.length}`);
-console.log(`  Mean: ${overallMean.toFixed(3)}`);
+console.log(`  Mean: ${(xs.reduce((a, b) => a + b, 0) / xs.length).toFixed(3)}`);

@@ -97,7 +97,7 @@ describe("metropolisHastings with transforms", () => {
     };
 
     const result = metropolisHastings(halfNormalLogDensity, 1, {
-      transforms: [positiveTransform()],
+      transforms: [{ startIndex: 0, transform: positiveTransform() }],
       iterations: 5000,
       burnIn: 500,
       thin: 2,
@@ -125,7 +125,10 @@ describe("metropolisHastings with transforms", () => {
     };
 
     const result = metropolisHastings(logDensity, 2, {
-      transforms: [positiveTransform(), unitIntervalTransform()],
+      transforms: [
+        { startIndex: 0, transform: positiveTransform() },
+        { startIndex: 1, transform: unitIntervalTransform() },
+      ],
       iterations: 2000,
       burnIn: 200,
       start: [1.0, 0.5], // constrained: x0 > 0, x1 ∈ (0, 1)
@@ -148,7 +151,7 @@ describe("metropolisHastings with transforms", () => {
     };
 
     const result = metropolisHastings(halfNormalLogDensity, 1, {
-      transforms: [positiveTransform()],
+      transforms: [{ startIndex: 0, transform: positiveTransform() }],
       iterations: 500,
       start: [2.0], // constrained space
     });
@@ -165,7 +168,7 @@ describe("metropolisHastings with transforms", () => {
     };
 
     const result = metropolisHastings(halfNormalLogDensity, 1, {
-      transforms: [positiveTransform()],
+      transforms: [{ startIndex: 0, transform: positiveTransform() }],
       chains: 4,
       iterations: 1000,
       burnIn: 100,
@@ -181,15 +184,15 @@ describe("metropolisHastings with transforms", () => {
     });
   });
 
-  it("throws error if transforms length doesn't match dim", () => {
+  it("throws error if transforms exceed dim", () => {
     const logDensity = (x: Vector) => -0.5 * x[0] * x[0];
 
     expect(() => {
-      metropolisHastings(logDensity, 2, {
-        transforms: [positiveTransform()], // only 1 transform for 2 dimensions
+      metropolisHastings(logDensity, 1, {
+        transforms: [{ startIndex: 0, transform: positiveTransform(2) }], // 2-dim transform for 1-dim problem
         iterations: 100,
       });
-    }).toThrow("transforms.length (1) must equal dim (2)");
+    }).toThrow(/exceed/);
   });
 
   it("works with custom chainStarts in constrained space", () => {
@@ -201,7 +204,7 @@ describe("metropolisHastings with transforms", () => {
     const constrainedStarts: Vector[] = [[0.5], [1.0], [2.0]];
 
     const result = metropolisHastings(halfNormalLogDensity, 1, {
-      transforms: [positiveTransform()],
+      transforms: [{ startIndex: 0, transform: positiveTransform() }],
       chains: 3,
       chainStarts: constrainedStarts, // in constrained space
       iterations: 500,
@@ -278,7 +281,7 @@ describe("metropolisHastings with adaptive step size", () => {
     };
 
     const result = metropolisHastings(halfNormalLogDensity, 1, {
-      transforms: [positiveTransform()],
+      transforms: [{ startIndex: 0, transform: positiveTransform() }],
       iterations: 10000,
       burnIn: 5000,
       stepSize: 1.0, // Closer to optimal to avoid numerical issues
@@ -356,7 +359,7 @@ describe("metropolisHastings with per-dimension step sizes", () => {
     expect(result.acceptanceRates[0]).toBeLessThan(0.9);
   });
 
-  it("throws error if stepSize array length doesn't match dim", () => {
+  it("throws error if stepSize array length doesn't match unconstrained dim", () => {
     const logp = (x: Vector) => -0.5 * x[0] * x[0];
 
     expect(() => {
@@ -364,7 +367,7 @@ describe("metropolisHastings with per-dimension step sizes", () => {
         stepSize: [0.5], // Only 1 step size for 2 dimensions
         iterations: 100,
       });
-    }).toThrow("stepSize array length (1) must equal dim (2)");
+    }).toThrow("stepSize array length (1) must equal unconstrained dim (2)");
   });
 
   it("works with adaptation and per-dimension step sizes", () => {

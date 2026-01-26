@@ -1,21 +1,22 @@
 import { LogDensity, PCG32, Vector, add, zeros } from "./core.js";
 import {
-  Transform,
+  TransformSpec,
   transformedLogDensity,
   applyTransformToChain,
   composeTransforms,
+  identityTransform,
 } from "./transforms.js";
 
 export interface MHOptions {
   stepSize?: number | number[]; // proposal std dev (scalar or per-dimension)
-  burnIn?: number; // how many inital samples to discard when returning
+  burnIn?: number; // how many inital samples to discard
   thin?: number; // keep 1 of every 'thin' samples
   iterations: number; // total proposals
   seed?: bigint; // RNG seed for reproducibility (default: 0)
   start?: Vector; // initial point (for single chain, in constrained space if transforms provided)
   chains?: number; // number of chains to run (default: 1)
   chainStarts?: Vector[]; // custom starting points per chain (in constrained space if transforms provided)
-  transforms?: Transform[]; // optional transforms (one per dimension)
+  transforms?: TransformSpec[]; // optional block transforms (sparse, identity-filled)
   targetAcceptance?: number; // target acceptance rate for adaptation (e.g. 0.23)
   adaptSteps?: number; // number of iterations to adapt step size (only during warmup)
   adaptWindow?: number; // window size for computing acceptance rate (default: 50)
@@ -33,7 +34,7 @@ export function metropolisHastings(
   opts: MHOptions,
 ): MHResult {
   const {
-    stepSize: stepSizeOpt = 0.5,
+    stepSize = 0.5,
     burnIn = 0,
     thin = 1,
     iterations,
@@ -49,47 +50,33 @@ export function metropolisHastings(
 
   const userProvidedStart = opts.start !== undefined;
 
-  // Normalize stepSize to array
-  const stepSizeArray: number[] = Array.isArray(stepSizeOpt)
-    ? stepSizeOpt
-    : Array(dim).fill(stepSizeOpt);
+  // Apply transformation (identity if none provided)
+  const transform = transforms
+    ? composeTransforms(dim, transforms)
+    : identityTransform(dim);
 
-  if (stepSizeArray.length !== dim) {
+  if (transform.outputDim !== dim) {
     throw new Error(
-      `stepSize array length (${stepSizeArray.length}) must equal dim (${dim})`,
+      `Transform outputDim (${transform.outputDim}) must equal dim (${dim})`,
     );
   }
 
-  // Validate transforms (if provided)
-  if (transforms) {
-    if (transforms.length !== dim) {
-      throw new Error(
-        `transforms.length (${transforms.length}) must equal dim (${dim})`,
-      );
-    }
-  }
+  dim = transform.inputDim;
+  logDensity = transformedLogDensity(logDensity, transform);
 
-  // Compose transforms and prepare transformed log density
-  let composedTransform: Transform | undefined;
-  let actualLogDensity = logDensity;
+  // If user provided start, transform starting points to unconstrained space
+  const actualStart = userProvidedStart ? transform.inverse(start) : zeros(dim);
+  const actualChainStarts = chainStarts?.map((s) => transform.inverse(s));
 
-  if (transforms) {
-    composedTransform = composeTransforms(transforms);
-    actualLogDensity = transformedLogDensity(logDensity, composedTransform);
-  }
+  // Normalize stepSize to array (in unconstrained space)
+  const stepSizeArray: number[] = Array.isArray(stepSize)
+    ? stepSize
+    : Array(dim).fill(stepSize);
 
-  // Transform user-provided starting points (if transforms are used)
-  let actualStart = start;
-  let actualChainStarts = chainStarts;
-
-  if (transforms && composedTransform) {
-    // User provides constrained starts, we need unconstrained
-    if (userProvidedStart) {
-      actualStart = composedTransform.inverse(start);
-    }
-    if (chainStarts) {
-      actualChainStarts = chainStarts.map((s) => composedTransform!.inverse(s));
-    }
+  if (stepSizeArray.length !== dim) {
+    throw new Error(
+      `stepSize array length (${stepSizeArray.length}) must equal unconstrained dim (${dim})`,
+    );
   }
 
   // Generate starting points for each chain
@@ -116,7 +103,7 @@ export function metropolisHastings(
     const chainRng = new PCG32(seed + BigInt(c), BigInt(c));
 
     let x: Vector = starts[c].slice();
-    let logp = actualLogDensity(x);
+    let logp = logDensity(x);
     const rawTrace: Vector[] = [x.slice()];
     let accepted = 0;
 
@@ -132,7 +119,7 @@ export function metropolisHastings(
         chainRng.normal(0, currentStepArray[i]),
       );
       const xNew = add(x, proposal);
-      const logpNew = actualLogDensity(xNew);
+      const logpNew = logDensity(xNew);
 
       // symmetric proposal => MH ratio = exp(logpNew - logp)
       const logAlpha = logpNew - logp;
@@ -171,25 +158,13 @@ export function metropolisHastings(
     acceptanceRates.push(accepted / iterations);
   }
 
-  // Transform samples back to constrained space (if transforms were used)
-  if (transforms && composedTransform) {
-    const constrainedSamples = allSamples.map((chain) =>
-      applyTransformToChain(chain, composedTransform!),
-    );
-    const constrainedRawTraces = allRawTraces.map((chain) =>
-      applyTransformToChain(chain, composedTransform!),
-    );
-    return {
-      samples: constrainedSamples,
-      acceptanceRates,
-      rawTraces: constrainedRawTraces,
-    };
-  }
-
+  // Transform samples back to constrained space
   return {
-    samples: allSamples,
+    samples: allSamples.map((chain) => applyTransformToChain(chain, transform)),
     acceptanceRates,
-    rawTraces: allRawTraces,
+    rawTraces: allRawTraces.map((chain) =>
+      applyTransformToChain(chain, transform),
+    ),
   };
 }
 

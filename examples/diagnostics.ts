@@ -1,25 +1,27 @@
-import { metropolisHastings, summarizeChains, Vector } from "../src/index.js";
+import { defineModel, Vector } from "../src/index.js";
 
 // Standard normal log density
 const logDensity = (x: Vector) => -0.5 * x[0] * x[0];
 
 console.log("=== Example 1: Standard Normal (Good Convergence) ===\n");
 
-const res = metropolisHastings(logDensity, 1, {
+const model = defineModel({ logDensity, dim: 1 });
+
+const result = model.sample({
   chains: 4,
   iterations: 100_000,
-  stepSize: 0.7,
-  burnIn: 500,
+  warmup: 500,
   thin: 5,
+  stepSize: 0.7,
 });
 
-const summary = summarizeChains(res.samples);
+const summary = result.summary();
 
-console.log("Chains:", res.samples.length);
-console.log("Samples per chain:", res.samples[0].length);
+console.log("Chains:", result.draws.length);
+console.log("Samples per chain:", result.draws[0].length);
 console.log(
   "\nAcceptance rates:",
-  res.acceptanceRates.map((r) => r.toFixed(3)).join(", "),
+  result.acceptanceRates.map((r) => r.toFixed(3)).join(", "),
 );
 console.log("\n=== Summary ===");
 console.log("Mean:", summary.mean[0].toFixed(4), "(expected: 0.0000)");
@@ -28,7 +30,7 @@ console.log("ESS: ", Math.round(summary.ess[0]));
 console.log(
   "R-hat:",
   summary.rhat[0].toFixed(4),
-  summary.rhat[0] < 1.01 ? "✓" : "⚠",
+  summary.rhat[0] < 1.01 ? "" : "",
 );
 
 // Example 2: Banana distribution (difficult to sample)
@@ -41,17 +43,19 @@ const bananaLogDensity = (x: Vector) => {
   return logPx + logPy;
 };
 
-const badRes = metropolisHastings(bananaLogDensity, 2, {
+const bananaModel = defineModel({ logDensity: bananaLogDensity, dim: 2 });
+
+const badResult = bananaModel.sample({
   chains: 4,
   iterations: 10_000,
+  warmup: 500,
   stepSize: 1.0,
-  burnIn: 500,
 });
 
-const badSummary = summarizeChains(badRes.samples);
+const badSummary = badResult.summary();
 
-console.log("Chains:", badRes.samples.length);
-console.log("Samples per chain:", badRes.samples[0].length);
+console.log("Chains:", badResult.draws.length);
+console.log("Samples per chain:", badResult.draws[0].length);
 console.log("\n=== Summary ===");
 console.log("       Mean      SD     ESS    R-hat");
 console.log(
@@ -63,8 +67,8 @@ console.log(
 
 const maxRhat = Math.max(...badSummary.rhat);
 if (maxRhat > 1.05) {
-  console.log("\n⚠ Chains have NOT converged (R-hat > 1.05)");
+  console.log("\n Chains have NOT converged (R-hat > 1.05)");
   console.log(
-    "  → The curved geometry requires more advanced methods (HMC, NUTS)",
+    "   The curved geometry requires more advanced methods (HMC, NUTS)",
   );
 }

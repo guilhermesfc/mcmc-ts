@@ -1,41 +1,40 @@
-import { metropolisHastings, simpleESS, rhatAll } from "../src/index.js";
+import { defineModel } from "../src/index.js";
 import * as fs from "fs";
-
-const dim = 1;
 
 // Standard normal log density (up to a constant)
 const logDensity = (x: number[]) => {
   const v = x[0];
-  return -0.5 * v * v; // no need to add -0.5*log(2π)
+  return -0.5 * v * v;
 };
 
-// Run 4 chains to assess convergence
-const res = metropolisHastings(logDensity, dim, {
+// Define model and run 4 chains
+const model = defineModel({ logDensity, dim: 1 });
+
+const result = model.sample({
   chains: 4,
   iterations: 10_000,
-  stepSize: 0.7,
-  burnIn: 500,
+  warmup: 500,
   thin: 5,
+  stepSize: 0.7,
 });
 
 // Combine all chains
-const allSamples = res.samples.flat();
+const allSamples = result.draws.flat();
 const xs = allSamples.map((row) => row[0]);
 const mean = xs.reduce((a, b) => a + b, 0) / xs.length;
 
-console.log("Chains:", res.samples.length);
-console.log("Samples per chain:", res.samples[0].length);
+const summary = result.summary();
+
+console.log("Chains:", result.draws.length);
+console.log("Samples per chain:", result.draws[0].length);
 console.log("Total samples:", xs.length);
 console.log(
   "Acceptance rates:",
-  res.acceptanceRates.map((r) => r.toFixed(3)).join(", "),
+  result.acceptanceRates.map((r) => r.toFixed(3)).join(", "),
 );
 console.log("Sample mean (should be ~0):", mean.toFixed(3));
-console.log("ESS (combined):", Math.round(simpleESS(xs)));
-
-// R-hat convergence diagnostic
-const rhats = rhatAll(res.samples);
-console.log("R-hat:", rhats[0].toFixed(4));
+console.log("ESS:", Math.round(summary.ess[0]));
+console.log("R-hat:", summary.rhat[0].toFixed(4));
 
 // Create histogram data
 const bins = 50;
@@ -58,7 +57,7 @@ for (let i = height; i > 0; i--) {
   const threshold = (i / height) * maxCount;
   let line = "";
   for (let j = 0; j < bins; j++) {
-    line += histogram[j] >= threshold ? "█" : " ";
+    line += histogram[j] >= threshold ? "#" : " ";
   }
   console.log(line);
 }
@@ -66,7 +65,7 @@ for (let i = height; i > 0; i--) {
 // X-axis
 const xAxisMin = min.toFixed(1);
 const xAxisMax = max.toFixed(1);
-console.log("└" + "─".repeat(bins - 2) + "┘");
+console.log("-" + "-".repeat(bins - 2) + "-");
 console.log(
   xAxisMin + " ".repeat(bins - xAxisMin.length - xAxisMax.length) + xAxisMax,
 );
@@ -79,7 +78,7 @@ const chainColors = [
   "rgba(255, 165, 0, 0.7)",
 ];
 
-const chainData = res.samples.map((chain, i) => ({
+const chainData = result.draws.map((chain, i) => ({
   chain: i + 1,
   samples: chain.map((row) => row[0]),
   color: chainColors[i],
@@ -107,12 +106,12 @@ const html = `<!DOCTYPE html>
 
   <h3>Convergence Diagnostics</h3>
   <p>R-hat: <span id="rhat-value"></span> <span id="rhat-status"></span></p>
-  <p>Acceptance rates: ${res.acceptanceRates.map((r, i) => `Chain ${i + 1}: ${r.toFixed(3)}`).join(", ")}</p>
-  <p>Total samples: ${xs.length} (${res.samples[0].length} per chain)</p>
+  <p>Acceptance rates: ${result.acceptanceRates.map((r, i) => `Chain ${i + 1}: ${r.toFixed(3)}`).join(", ")}</p>
+  <p>Total samples: ${xs.length} (${result.draws[0].length} per chain)</p>
 
   <script>
     const chains = ${JSON.stringify(chainData)};
-    const rhat = ${rhats[0]};
+    const rhat = ${summary.rhat[0]};
 
     // Display R-hat with color coding
     const rhatValueEl = document.getElementById('rhat-value');
@@ -120,13 +119,13 @@ const html = `<!DOCTYPE html>
     rhatValueEl.textContent = rhat.toFixed(4);
 
     if (rhat < 1.01) {
-      rhatStatusEl.textContent = '✓ Excellent convergence';
+      rhatStatusEl.textContent = 'Excellent convergence';
       rhatStatusEl.className = 'convergence-good';
     } else if (rhat < 1.05) {
-      rhatStatusEl.textContent = '✓ Good convergence';
+      rhatStatusEl.textContent = 'Good convergence';
       rhatStatusEl.className = 'convergence-ok';
     } else {
-      rhatStatusEl.textContent = '⚠ Chains may not have converged';
+      rhatStatusEl.textContent = 'Chains may not have converged';
       rhatStatusEl.className = 'convergence-bad';
     }
 
@@ -216,5 +215,5 @@ const html = `<!DOCTYPE html>
 </html>`;
 
 fs.writeFileSync("mcmc-plot.html", html);
-console.log("\n✓ Interactive plot saved to mcmc-plot.html");
+console.log("\nInteractive plot saved to mcmc-plot.html");
 console.log("  Open it in your browser to see the full visualization!");
